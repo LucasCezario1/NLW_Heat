@@ -1,11 +1,14 @@
+import { PrismaClient } from '@prisma/client';
 import axios from "axios";
+import prismaClient from '../prisma'
+import {sign} from "jsonwebtoken"
 
 interface IaccessTokenResponse{
     access_token : string
 }
 
 interface IUserResponse{
-    avatar_Url: string,
+    avatar_url: string,
     login : string,
     id : number,
     name : string
@@ -34,7 +37,39 @@ class AuthenticateUserService {
         },
         });
 
-        return res.data;
+        const {login, id ,avatar_url, name} = res.data;
+
+        // verifica se o usuario e e igual que esta no github
+        const user = await prismaClient.user.findFirst({
+            where:{
+                github_id: id
+            }
+        })
+          if(!user){
+            await prismaClient.user.create({
+                data: {
+                    github_id: id,
+                    login,
+                    avatar_url,
+                    name,
+                }
+            })
+          }
+
+        const token = sign( {
+        user:{
+            name: user.name,
+            avatar_url: user.avatar_url,
+            id: user.id,
+            }
+        },
+            process.env.JWT_SECRET,
+            {
+                subject: user.id,
+                expiresIn: "1d"
+            }
+        );
+        return {token, user};
     }
 }
 
